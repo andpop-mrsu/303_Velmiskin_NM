@@ -33187,3 +33187,115 @@ VALUES
 (941, 'Marques Weissnat', 'tianna87@gmail.com', 'male', '2011-06-23', 'student'),
 (942, 'Isabel Koelpin', 'rachael72@howell.com', 'female', '2005-11-14', 'librarian'),
 (943, 'Eda Reynolds', 'sebert@hessel.com', 'female', '2021-01-08', 'student');
+
+PRAGMA foreign_keys = off;
+
+DROP TABLE IF EXISTS movies_tags;
+DROP TABLE IF EXISTS occupations;
+DROP TABLE IF EXISTS movies_genres;
+DROP TABLE IF EXISTS genres;
+
+CREATE TABLE new_movies(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	title TEXT NOT NULL,
+	year INTEGER DEFAULT NULL
+);
+
+CREATE TABLE new_users(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	first_name TEXT NOT NULL,
+	last_name TEXT NOT NULL,
+	email TEXT NOT NULL UNIQUE,
+	gender TEXT NOT NULL CHECK(gender == "male" OR gender == "female"),
+	register_date TEXT NOT NULL,
+	occupation_id INTEGER NOT NULL,
+	FOREIGN KEY(occupation_id)
+		REFERENCES occupations(id) ON DELETE CASCADE
+);
+
+CREATE TABLE new_ratings(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id INTEGER NOT NULL,
+	movie_id INTEGER NOT NULL,
+	rating REAL NOT NULL CHECK(rating >= 0.0 AND rating <= 5.0),
+	timestamp INTEGER NOT NULL,
+	FOREIGN KEY(user_id)
+		REFERENCES users(id) ON DELETE CASCADE,
+	FOREIGN KEY(movie_id)
+		REFERENCES movies(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE new_tags(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	tag TEXT NOT NULL
+);
+
+CREATE TABLE movies_tags(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id INTEGER NOT NULL,
+	movie_id INTEGER NOT NULL,
+	tag_id INTEGER NOT NULL,
+	timestamp INTEGER NOT NULL,
+	FOREIGN KEY(user_id)
+		REFERENCES users(id) ON DELETE CASCADE,
+	FOREIGN KEY(movie_id)
+		REFERENCES movies(id) ON DELETE CASCADE,
+	FOREIGN KEY(tag_id)
+		REFERENCES tags(id) ON DELETE CASCADE
+);
+
+CREATE TABLE occupations(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	occupation TEXT NOT NULL
+);
+
+CREATE TABLE genres(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	genre TEXT NOT NULL
+);
+
+CREATE TABLE movies_genres(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	movie_id INTEGER NOT NULL,
+	genre_id INTEGER NOT NULL,
+	FOREIGN KEY(movie_id)
+		REFERENCES movies(id) ON DELETE CASCADE,
+	FOREIGN KEY(genre_id)
+		REFERENCES genres(id) ON DELETE CASCADE
+);
+
+INSERT INTO new_movies(id, title, year) SELECT id, title, year FROM movies;
+
+INSERT INTO occupations(occupation) SELECT DISTINCT occupation FROM users;
+
+INSERT INTO new_users(first_name, last_name, email, gender, register_date, occupation_id) SELECT substr(name, instr(name, ' ') + 1), substr(name, 1, instr(name, ' ')  - 1), email, gender, register_date, o.id  FROM users u INNER JOIN occupations o ON u.occupation == o.occupation;
+
+INSERT INTO new_ratings(user_id, movie_id, rating, timestamp) SELECT user_id, movie_id, rating, timestamp FROM ratings;
+
+INSERT INTO new_tags(tag) SELECT DISTINCT tag FROM tags;
+
+INSERT INTO movies_tags(id, user_id, movie_id, tag_id, timestamp) SELECT t.id, t.user_id, t.movie_id, nt.id, t.timestamp FROM tags t JOIN new_tags nt ON t.tag == nt.tag;
+
+WITH RECURSIVE all_genres(genres, str) AS (
+	SELECT '', movies.genres || '|' FROM movies 
+	UNION ALL 
+	SELECT substr(str, 0, instr(str, '|')), substr(genres, instr(genres, '|') + 1) FROM all_genres WHERE str != '')
+INSERT INTO genres(genre) SELECT genres FROM all_genres WHERE genres != '' GROUP BY genres;
+
+INSERT INTO movies_genres(movie_id, genre_id) SELECT m.id, g.id FROM movies m JOIN genres g ON instr(m.genres, g.genre);
+
+DROP TABLE IF EXISTS movies;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS ratings;
+DROP TABLE IF EXISTS tags;
+
+ALTER TABLE new_movies RENAME TO movies;
+ALTER TABLE new_users RENAME TO users;
+ALTER TABLE new_ratings RENAME TO ratings;
+ALTER TABLE new_tags RENAME TO tags;
+
+CREATE INDEX users_last_name_index ON users (last_name);
+CREATE INDEX movies_title_index ON movies (title);
+CREATE INDEX movies_year_index ON movies (year);
+
+PRAGMA foreign_keys = ON;
